@@ -28,6 +28,8 @@ application_for :ios, 9.0 do |target|
     target.exclude_files << "AppRTCMobile/tests/*.*"
     target.exclude_files << "AppRTCMobile/mac/*.*"
 
+    target.include_files << "WebRTC.framework"
+
     target.all_configurations.each do |c|
       c.settings["INFOPLIST_FILE"] = "AppRTCMobile/ios/Info.plist"
       c.settings["ENABLE_BITCODE"] = "NO"

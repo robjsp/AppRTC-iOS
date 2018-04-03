@@ -2,9 +2,9 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "group:AppRTCMobile.xcodeproj">
+      location = "group:WebRTC/WebRTC.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:Pods/Pods.xcodeproj">
+      location = "group:AppRTCMobile.xcodeproj">
    </FileRef>
 </Workspace>
