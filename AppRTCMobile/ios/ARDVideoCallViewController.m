@@ -14,6 +14,7 @@
 #import "WebRTC/RTCCameraVideoCapturer.h"
 
 #import "ARDAppClient.h"
+#import "ARDMsgAppClient.h"
 #import "ARDCaptureController.h"
 #import "ARDFileCaptureController.h"
 #import "ARDSettingsModel.h"
@@ -22,7 +23,8 @@
 #import "WebRTC/RTCLogging.h"
 #import "WebRTC/RTCMediaConstraints.h"
 
-@interface ARDVideoCallViewController () <ARDAppClientDelegate,
+@interface ARDVideoCallViewController () </*ARDAppClientDelegate,*/
+                                          ARDMsgAppClientDelegate,
                                           ARDVideoCallViewDelegate,
                                           RTCAudioSessionDelegate>
 @property(nonatomic, strong) RTCVideoTrack *remoteVideoTrack;
@@ -30,7 +32,8 @@
 @end
 
 @implementation ARDVideoCallViewController {
-  ARDAppClient *_client;
+  //ARDAppClient *_client;
+  ARDMsgAppClient *_msgClient;
   RTCVideoTrack *_remoteVideoTrack;
   ARDCaptureController *_captureController;
   ARDFileCaptureController *_fileCaptureController NS_AVAILABLE_IOS(10);
@@ -48,8 +51,10 @@
     ARDSettingsModel *settingsModel = [[ARDSettingsModel alloc] init];
     _delegate = delegate;
 
-    _client = [[ARDAppClient alloc] initWithDelegate:self];
-    [_client connectToRoomWithId:room settings:settingsModel isLoopback:isLoopback];
+    //_client = [[ARDAppClient alloc] initWithDelegate:self];
+    _msgClient = [[ARDMsgAppClient alloc] initWithDelegate:self];
+    //[_client connectToRoomWithId:room settings:settingsModel isLoopback:isLoopback];
+    [_msgClient connectToRoomWithId:room settings:settingsModel isLoopback:isLoopback];
   }
   return self;
 }
@@ -71,8 +76,8 @@
 
 #pragma mark - ARDAppClientDelegate
 
-- (void)appClient:(ARDAppClient *)client
-    didChangeState:(ARDAppClientState)state {
+- (void)appClient:(ARDMsgAppClient *)client
+    didChangeState:(ARDMsgAppClientState)state {
   switch (state) {
     case kARDAppClientStateConnected:
       RTCLog(@"Client connected.");
@@ -87,7 +92,7 @@
   }
 }
 
-- (void)appClient:(ARDAppClient *)client
+- (void)appClient:(ARDMsgAppClient *)client
     didChangeConnectionState:(RTCIceConnectionState)state {
   RTCLog(@"ICE state changed: %ld", (long)state);
   __weak ARDVideoCallViewController *weakSelf = self;
@@ -127,13 +132,13 @@
   _videoCallView.statusLabel.hidden = YES;
 }
 
-- (void)appClient:(ARDAppClient *)client
+- (void)appClient:(ARDMsgAppClient *)client
       didGetStats:(NSArray *)stats {
   _videoCallView.statsView.stats = stats;
   [_videoCallView setNeedsLayout];
 }
 
-- (void)appClient:(ARDAppClient *)client
+- (void)appClient:(ARDMsgAppClient *)client
          didError:(NSError *)error {
   NSString *message =
       [NSString stringWithFormat:@"%@", error.localizedDescription];
@@ -141,102 +146,110 @@
   [self showAlertWithMessage:message];
 }
 
+#pragma mark - ARDMsgAppClientDelegate
+
+- (void)appClient:(ARDMsgAppClient *)client
+        onMessage:(NSString *)message {
+    NSLog(@"onMessage %@", message);
+}
+
 #pragma mark - ARDVideoCallViewDelegate
 
 - (void)videoCallViewDidHangup:(ARDVideoCallView *)view {
-  [self hangup];
+    [self hangup];
 }
 
 - (void)videoCallViewDidSwitchCamera:(ARDVideoCallView *)view {
-  // TODO(tkchin): Rate limit this so you can't tap continously on it.
-  // Probably through an animation.
-  [_captureController switchCamera];
+        // TODO(tkchin): Rate limit this so you can't tap continously on it.
+        // Probably through an animation.
+    [_captureController switchCamera];
 }
 
 - (void)videoCallViewDidChangeRoute:(ARDVideoCallView *)view {
-  AVAudioSessionPortOverride override = AVAudioSessionPortOverrideNone;
-  if (_portOverride == AVAudioSessionPortOverrideNone) {
-    override = AVAudioSessionPortOverrideSpeaker;
-  }
-  [RTCDispatcher dispatchAsyncOnType:RTCDispatcherTypeAudioSession
-                               block:^{
-    RTCAudioSession *session = [RTCAudioSession sharedInstance];
-    [session lockForConfiguration];
-    NSError *error = nil;
-    if ([session overrideOutputAudioPort:override error:&error]) {
-      _portOverride = override;
-    } else {
-      RTCLogError(@"Error overriding output port: %@",
-                  error.localizedDescription);
+    AVAudioSessionPortOverride override = AVAudioSessionPortOverrideNone;
+    if (_portOverride == AVAudioSessionPortOverrideNone) {
+        override = AVAudioSessionPortOverrideSpeaker;
     }
-    [session unlockForConfiguration];
-  }];
+    [RTCDispatcher dispatchAsyncOnType:RTCDispatcherTypeAudioSession
+                                 block:^{
+                                     RTCAudioSession *session = [RTCAudioSession sharedInstance];
+                                     [session lockForConfiguration];
+                                     NSError *error = nil;
+                                     if ([session overrideOutputAudioPort:override error:&error]) {
+                                         _portOverride = override;
+                                     } else {
+                                         RTCLogError(@"Error overriding output port: %@",
+                                                     error.localizedDescription);
+                                     }
+                                     [session unlockForConfiguration];
+                                 }];
 }
 
 - (void)videoCallViewDidEnableStats:(ARDVideoCallView *)view {
-  _client.shouldGetStats = YES;
-  _videoCallView.statsView.hidden = NO;
+    //_client.shouldGetStats = YES;
+    _videoCallView.statsView.hidden = NO;
 }
 
 #pragma mark - RTCAudioSessionDelegate
 
 - (void)audioSession:(RTCAudioSession *)audioSession
-    didDetectPlayoutGlitch:(int64_t)totalNumberOfGlitches {
-  RTCLog(@"Audio session detected glitch, total: %lld", totalNumberOfGlitches);
+didDetectPlayoutGlitch:(int64_t)totalNumberOfGlitches {
+    RTCLog(@"Audio session detected glitch, total: %lld", totalNumberOfGlitches);
 }
 
 #pragma mark - Private
 
 - (void)setRemoteVideoTrack:(RTCVideoTrack *)remoteVideoTrack {
-  if (_remoteVideoTrack == remoteVideoTrack) {
-    return;
-  }
-  [_remoteVideoTrack removeRenderer:_videoCallView.remoteVideoView];
-  _remoteVideoTrack = nil;
-  [_videoCallView.remoteVideoView renderFrame:nil];
-  _remoteVideoTrack = remoteVideoTrack;
-  [_remoteVideoTrack addRenderer:_videoCallView.remoteVideoView];
+    if (_remoteVideoTrack == remoteVideoTrack) {
+        return;
+    }
+    [_remoteVideoTrack removeRenderer:_videoCallView.remoteVideoView];
+    _remoteVideoTrack = nil;
+    [_videoCallView.remoteVideoView renderFrame:nil];
+    _remoteVideoTrack = remoteVideoTrack;
+    [_remoteVideoTrack addRenderer:_videoCallView.remoteVideoView];
 }
 
 - (void)hangup {
-  self.remoteVideoTrack = nil;
-  _videoCallView.localVideoView.captureSession = nil;
-  [_captureController stopCapture];
-  _captureController = nil;
-  [_fileCaptureController stopCapture];
-  _fileCaptureController = nil;
-  [_client disconnect];
-  [_delegate viewControllerDidFinish:self];
+    self.remoteVideoTrack = nil;
+    _videoCallView.localVideoView.captureSession = nil;
+    [_captureController stopCapture];
+    _captureController = nil;
+    [_fileCaptureController stopCapture];
+    _fileCaptureController = nil;
+    //[_client disconnect];
+    [_msgClient disconnect];
+    [_delegate viewControllerDidFinish:self];
 }
 
 - (NSString *)statusTextForState:(RTCIceConnectionState)state {
-  switch (state) {
-    case RTCIceConnectionStateNew:
-    case RTCIceConnectionStateChecking:
-      return @"Connecting...";
-    case RTCIceConnectionStateConnected:
-    case RTCIceConnectionStateCompleted:
-    case RTCIceConnectionStateFailed:
-    case RTCIceConnectionStateDisconnected:
-    case RTCIceConnectionStateClosed:
-    case RTCIceConnectionStateCount:
-      return nil;
-  }
+    switch (state) {
+        case RTCIceConnectionStateNew:
+        case RTCIceConnectionStateChecking:
+            return @"Connecting...";
+        case RTCIceConnectionStateConnected:
+        case RTCIceConnectionStateCompleted:
+        case RTCIceConnectionStateFailed:
+        case RTCIceConnectionStateDisconnected:
+        case RTCIceConnectionStateClosed:
+        case RTCIceConnectionStateCount:
+            return nil;
+    }
 }
 
 - (void)showAlertWithMessage:(NSString*)message {
-  UIAlertController *alert =
-      [UIAlertController alertControllerWithTitle:nil
-                                          message:message
-                                   preferredStyle:UIAlertControllerStyleAlert];
-
-  UIAlertAction *defaultAction = [UIAlertAction actionWithTitle:@"OK"
-                                                          style:UIAlertActionStyleDefault
-                                                        handler:^(UIAlertAction *action){
-                                                        }];
-
-  [alert addAction:defaultAction];
-  [self presentViewController:alert animated:YES completion:nil];
+    UIAlertController *alert =
+    [UIAlertController alertControllerWithTitle:nil
+                                        message:message
+                                 preferredStyle:UIAlertControllerStyleAlert];
+    
+    UIAlertAction *defaultAction = [UIAlertAction actionWithTitle:@"OK"
+                                                            style:UIAlertActionStyleDefault
+                                                          handler:^(UIAlertAction *action){
+                                                          }];
+    
+    [alert addAction:defaultAction];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 @end
