@@ -2,7 +2,7 @@
 
 ## Project setup
 
-Run `./setup_xcode_project.sh`.
+Install [XcodeGen](https://github.com/yonaskolb/XcodeGen) and [cocoapods](https://cocoapods.org/), then run `./setup_xcode_project.sh`.
 
 ## Source code directories
 
